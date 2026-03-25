@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CF Analyzer</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  
+  <div class="container">
+
+    <div class="header">
+      <h1>⚡ CF Analyzer</h1>
+      <p class="subtitle">Enter your Codeforces handle for a full AI-powered skill analysis.</p>
+    </div>
+
+    <div class="input-section">
+      <input type="text" id="handleInput" placeholder="Codeforces handle (e.g. ecnerwala)" />
+      <button id="analyzeBtn" onclick="startAnalysis()">Analyze →</button>
+    </div>
+
+    <div id="loader" class="hidden">
+      <div class="spinner"></div>
+      <p id="loaderText">Loading...</p>
+    </div>
+
+    <div id="errorBox" class="hidden error-box"></div>
+
+    <div id="results" class="hidden">
+
+      <div class="card" id="userCard"></div>
+
+      <div class="tabs">
+        <button class="tab" onclick="switchTab(0)">Overview</button>
+        <button class="tab" onclick="switchTab(1)">Topics</button>
+        <button class="tab" onclick="switchTab(2)">Weaknesses</button>
+        <button class="tab active" onclick="switchTab(3)">Roadmap</button>
+        <button class="tab" onclick="switchTab(4)">Contests</button>
+      </div>
+
+      <div class="card tab-panel" id="panel-0"></div>
+      <div class="card tab-panel hidden" id="panel-1"></div>
+      <div class="card tab-panel hidden" id="panel-2"></div>
+      <div class="card tab-panel hidden" id="panel-3"></div>
+      <div class="card tab-panel hidden" id="panel-4"></div>
+
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+  
+  <!-- Vercel Speed Insights -->
+  <script>
+    window.si = window.si || function () { (window.siq = window.siq || []).push(arguments); };
+  </script>
+  <script defer src="/_vercel/speed-insights/script.js"></script>
+  
+  <!-- Vercel Web Analytics -->
+  <script>
+    window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+  </script>
+  <script defer src="/_vercel/insights/script.js"></script>
+</body>
+</html>
