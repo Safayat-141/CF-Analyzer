@@ -204,55 +204,41 @@ If no contest history, give general tips for a coder at ${stats.comfortBucket} r
 // ═══════════════════════════════════════════
 
 async function callGemini(prompt) {
-  const res = await fetch('/api/analyze', {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt }),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || "AI analysis failed. Try again.");
+  // Use proxy on Vercel, direct call when running locally
+  const isVercel = window.location.hostname !== 'localhost' && 
+                   window.location.hostname !== '127.0.0.1' &&
+                   !window.location.protocol.startsWith('file');
+
+  if (isVercel) {
+    // Key is hidden in Vercel environment variable
+    const res = await fetch('/api/analyze', {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt }),
+    });
+    if (!res.ok) throw new Error("AI analysis failed.");
+    const data = await res.json();
+    return data.candidates[0].content.parts[0].text;
+
+  } else {
+    // Local development — key in code is fine for local use only
+    const key = "AIzaSyBHzVuWEG1Yo5bXtwqGUAIhNV_vpYwHuho";
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { maxOutputTokens: 8192, temperature: 0.4 },
+        }),
+      }
+    );
+    if (!res.ok) throw new Error("Gemini API call failed.");
+    const data = await res.json();
+    return data.candidates[0].content.parts[0].text;
   }
-  const data = await res.json();
-  return data.candidates[0].content.parts[0].text;
-}`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { maxOutputTokens: 8192, temperature: 0.4 },
-```
-
-**Fix 2 — Tell Gemini to be brief in KNOW section so it doesn't waste tokens. Find the `[KNOW]` instruction in `buildPrompt` and replace it:**
-
-Find:
-```
-[KNOW]
-Based on the problem tags and solving patterns, list what this coder already knows.
-Group into two parts:
-Clearly knows: (list specific concepts like basic loops, arrays, strings, functions, sorting, greedy, math, etc.)
-Partially knows: (list concepts they have touched but not mastered)
-[KNOW_END]
-```
-
-Replace with:
-```
-[KNOW]
-In maximum 8 bullet points total, list what this coder already knows based on their tags.
-Write "Clearly knows:" then up to 5 items. Write "Partially knows:" then up to 3 items.
-Be brief — one line per item only.
-[KNOW_END]
-    }),
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error?.message || "Gemini API call failed. Check API key.");
-  }
-  const data = await res.json();
-  return data.candidates[0].content.parts[0].text;
 }
-
 // ═══════════════════════════════════════════
 // PARSE AI RESPONSE
 // Tag-based extraction — completely immune to
