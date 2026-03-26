@@ -486,6 +486,8 @@ async function startAnalysis() {
     renderWeaknesses(stats, null);
     renderRoadmap(stats, null);
     renderContests(stats, null);
+    const p5 = document.getElementById('panel-5');
+    if (p5) p5.innerHTML = '<p style="color:#4a5568;font-size:0.82rem;padding:8px 0">Switch to this tab after analysis loads to see your recent code reviewed.</p>';
     show('results');
     switchTab(0); // Start on Overview tab
 
@@ -496,11 +498,219 @@ async function startAnalysis() {
     const ai     = parseAnalysis(raw);
     injectAI(ai, stats);
 
+    // Start Recent tab analysis in background
+    renderRecent(submissions, userInfo);
+
   } catch (err) {
     showError(err.message);
     console.error(err);
   } finally {
     hide('loader');
     document.getElementById('analyzeBtn').disabled = false;
+  }
+}
+
+
+// ═══════════════════════════════════════════
+// FETCH SUBMISSION CODE (server proxy)
+// ═══════════════════════════════════════════
+
+async function fetchCode(contestId, submissionId) {
+  try {
+    const onVercel = window.location.hostname !== 'localhost' &&
+                     window.location.hostname !== '127.0.0.1' &&
+                     !window.location.protocol.startsWith('file');
+    if (!onVercel) return null;
+    const res = await fetch('/api/getcode', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contestId, submissionId }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.code || null;
+  } catch (e) {
+    return null;
+  }
+}
+
+// ═══════════════════════════════════════════
+// BUILD CODE ANALYSIS PROMPT
+// ═══════════════════════════════════════════
+
+function buildCodePrompt(userInfo, codesWithMeta) {
+  let samples = '';
+  for (let i = 0; i < codesWithMeta.length; i++) {
+    const s = codesWithMeta[i];
+    samples += '--- Problem ' + (i+1) + ': "' + s.problem + '" ';
+    samples += '(rating: ' + s.rating + ', tags: ' + s.tags.join(', ') + ') ---' + '\n';
+    samples += 'Language: ' + s.lang + '\n';
+    samples += (s.code ? s.code : '(code unavailable)') + '\n\n';
+  }
+
+  return 'You are an expert competitive programming coach doing a deep code review.\n\n'
+    + 'Coder: ' + userInfo.handle + ' (rating: ' + (userInfo.rating || 'Unrated') + ')\n\n'
+    + 'Here are their ' + codesWithMeta.length + ' most recent accepted solutions:\n'
+    + samples
+    + 'Analyze these solutions carefully and respond with EXACTLY these three tagged sections.\n'
+    + 'Do NOT use markdown, asterisks, bold, or hashes. Plain text and numbered lists only.\n\n'
+    + '[CODE_STYLE]\n'
+    + 'Describe exactly what programming style and constructs this coder uses.\n'
+    + 'Be specific: do they use functions or write everything in main? Do they use STL containers (vector, map, set)?\n'
+    + 'Do they use references, pointers, structs? Is their code clean or messy?\n'
+    + '[CODE_STYLE_END]\n\n'
+    + '[CODE_GAPS]\n'
+    + 'List specific programming concepts missing or poorly used in their code.\n'
+    + 'For each gap: name the concept exactly, explain why it matters, and give a one-line example.\n'
+    + 'Examples: no functions (should modularize), using arrays instead of vector, not using auto,\n'
+    + 'not using pair/struct, missing const references, inefficient loops, etc.\n'
+    + '[CODE_GAPS_END]\n\n'
+    + '[CODE_NEXT]\n'
+    + 'Give 3 to 5 numbered concrete things to improve immediately.\n'
+    + 'Each item: what to change, why it helps, short before/after code example.\n'
+    + '[CODE_NEXT_END]';
+}
+
+// ═══════════════════════════════════════════
+// PARSE CODE ANALYSIS RESPONSE
+// ═══════════════════════════════════════════
+
+function parseCodeAnalysis(raw) {
+  const tags = ['CODE_STYLE', 'CODE_GAPS', 'CODE_NEXT'];
+  const positions = {};
+  for (const tag of tags) {
+    positions[tag] = raw.indexOf('[' + tag + ']');
+  }
+  function extract(tag) {
+    const start = positions[tag];
+    if (start === -1) return null;
+    const contentStart = start + tag.length + 2;
+    let end = raw.length;
+    for (const other of tags) {
+      if (other === tag) continue;
+      const op = positions[other];
+      if (op > contentStart && op < end) end = op;
+    }
+    return raw.slice(contentStart, end).trim()
+      .replace(/\*\*/g, '').replace(/\*/g, '').replace(/^#+\s*/gm, '')
+      .replace(/\[CODE_STYLE_END\]/g, '')
+      .replace(/\[CODE_GAPS_END\]/g, '')
+      .replace(/\[CODE_NEXT_END\]/g, '')
+      .trim();
+  }
+  return { style: extract('CODE_STYLE'), gaps: extract('CODE_GAPS'), next: extract('CODE_NEXT') };
+}
+
+// ═══════════════════════════════════════════
+// RENDER RECENT TAB
+// ═══════════════════════════════════════════
+
+async function renderRecent(submissions, userInfo) {
+  const panel = document.getElementById('panel-5');
+  if (!panel) return;
+
+  const recent = submissions
+    .filter(function(s) { return s.verdict === 'OK' && s.problem.rating; })
+    .slice(0, 5);
+
+  if (recent.length === 0) {
+    panel.innerHTML = '<p style="color:#4a5568;font-size:0.82rem">No rated accepted submissions found.</p>';
+    return;
+  }
+
+  const cards = recent.map(function(s, i) {
+    const tags = (s.problem.tags || []).map(function(t) {
+      return '<span class="chip chip-medium" style="font-size:0.65rem;padding:2px 8px">' + t + '</span>';
+    }).join('');
+    return '<div style="background:#0a0e1a;border:1px solid #161b27;border-radius:8px;padding:14px 16px;margin-bottom:10px">'
+      + '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">'
+      + '<div>'
+      + '<div style="font-size:0.88rem;color:#e6edf3;font-weight:600;margin-bottom:4px">' + s.problem.name + '</div>'
+      + '<div style="font-size:0.72rem;color:#4a5568">'
+      + 'Rating: <span style="color:' + ratingColor(s.problem.rating) + '">' + s.problem.rating + '</span>'
+      + ' &nbsp;·&nbsp; Lang: <span style="color:#7a8a9a">' + s.programmingLanguage + '</span>'
+      + ' &nbsp;·&nbsp; Time: <span style="color:#7a8a9a">' + s.timeConsumedMillis + 'ms</span>'
+      + '</div>'
+      + '<div style="margin-top:6px">' + tags + '</div>'
+      + '</div>'
+      + '<div id="code-status-' + i + '" style="font-size:0.7rem;color:#4a5568">fetching code...</div>'
+      + '</div>'
+      + '<div id="code-block-' + i + '" style="display:none;margin-top:12px">'
+      + '<pre style="background:#060910;border:1px solid #0d1929;border-radius:6px;padding:12px;'
+      + 'font-size:0.73rem;color:#7ec8e3;overflow-x:auto;max-height:180px;overflow-y:auto;'
+      + 'white-space:pre;font-family:monospace"></pre>'
+      + '</div>'
+      + '</div>';
+  }).join('');
+
+  panel.innerHTML = '<div class="section-title">Last ' + recent.length + ' accepted submissions</div>'
+    + cards
+    + '<div id="code-ai-loading" style="margin-top:20px;font-size:0.78rem;color:#4a5568">Fetching code from Codeforces...</div>'
+    + '<div id="code-ai-result"></div>';
+
+  const codesWithMeta = [];
+
+  for (let i = 0; i < recent.length; i++) {
+    const sub = recent[i];
+    const statusEl = document.getElementById('code-status-' + i);
+    const blockEl  = document.getElementById('code-block-' + i);
+
+    const code = await fetchCode(sub.contestId, sub.id);
+
+    if (code) {
+      if (statusEl) { statusEl.textContent = 'code loaded'; statusEl.style.color = '#38d39f'; }
+      if (blockEl) {
+        blockEl.style.display = 'block';
+        const pre = blockEl.querySelector('pre');
+        if (pre) pre.textContent = code;
+      }
+    } else {
+      if (statusEl) { statusEl.textContent = 'only on Vercel'; statusEl.style.color = '#ffc947'; }
+    }
+
+    codesWithMeta.push({
+      problem: sub.problem.name,
+      rating:  sub.problem.rating,
+      tags:    sub.problem.tags || [],
+      lang:    sub.programmingLanguage,
+      code:    code,
+    });
+  }
+
+  const aiLoadEl = document.getElementById('code-ai-loading');
+  const aiResEl  = document.getElementById('code-ai-result');
+  if (aiLoadEl) aiLoadEl.textContent = 'Asking AI to analyze your code...';
+
+  try {
+    const prompt = buildCodePrompt(userInfo, codesWithMeta);
+    const raw = await callGemini(prompt);
+    const ai = parseCodeAnalysis(raw);
+    if (aiLoadEl) aiLoadEl.style.display = 'none';
+
+    let html = '';
+    if (ai.style) {
+      html += '<div style="margin-bottom:20px">'
+        + '<div style="font-size:0.72rem;color:#a78bfa;text-transform:uppercase;letter-spacing:0.1em;'
+        + 'padding:8px 14px;background:rgba(167,139,250,0.07);border-left:3px solid #a78bfa;'
+        + 'border-radius:0 4px 4px 0;margin-bottom:12px">Your Coding Style</div>'
+        + '<div class="ai-output" style="margin-top:0;padding-top:0;border-top:none">' + ai.style + '</div></div>';
+    }
+    if (ai.gaps) {
+      html += '<div style="margin-bottom:20px">'
+        + '<div style="font-size:0.72rem;color:#ff6b6b;text-transform:uppercase;letter-spacing:0.1em;'
+        + 'padding:8px 14px;background:rgba(255,107,107,0.07);border-left:3px solid #ff6b6b;'
+        + 'border-radius:0 4px 4px 0;margin-bottom:12px">Code Gaps To Fix</div>'
+        + '<div class="ai-output" style="margin-top:0;padding-top:0;border-top:none">' + ai.gaps + '</div></div>';
+    }
+    if (ai.next) {
+      html += '<div>'
+        + '<div style="font-size:0.72rem;color:#58a6ff;text-transform:uppercase;letter-spacing:0.1em;'
+        + 'padding:8px 14px;background:rgba(88,166,255,0.07);border-left:3px solid #58a6ff;'
+        + 'border-radius:0 4px 4px 0;margin-bottom:12px">Improve Your Code Now</div>'
+        + '<div class="ai-output" style="margin-top:0;padding-top:0;border-top:none">' + ai.next + '</div></div>';
+    }
+    if (aiResEl) aiResEl.innerHTML = html;
+  } catch (err) {
+    if (aiLoadEl) { aiLoadEl.textContent = 'AI analysis failed: ' + err.message; aiLoadEl.style.color = '#ff6b6b'; }
   }
 }
