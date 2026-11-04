@@ -455,9 +455,26 @@ function injectAI(ai, stats) {
 function switchTab(index) {
   document.querySelectorAll('.tab-panel').forEach((p, i) =>
     i === index ? p.classList.remove('hidden') : p.classList.add('hidden'));
-  document.querySelectorAll('.tab').forEach((t, i) =>
-    i === index ? t.classList.add('active') : t.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach((t, i) => {
+    const active = i === index;
+    t.classList.toggle('active', active);
+    t.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
 }
+
+// Small quality-of-life interactions for the static app shell.
+document.addEventListener('DOMContentLoaded', function () {
+  const input = document.getElementById('handleInput');
+  const toggle = document.getElementById('themeToggle');
+  input.addEventListener('keydown', function (event) {
+    if (event.key === 'Enter' && !event.nativeEvent?.isComposing && event.keyCode !== 229) startAnalysis();
+  });
+  toggle.addEventListener('click', function () {
+    const light = document.body.classList.toggle('light');
+    toggle.innerHTML = light ? '☾ <span>Theme</span>' : '☼ <span>Theme</span>';
+    toggle.setAttribute('aria-pressed', String(light));
+  });
+});
 
 // ═══════════════════════════════════════════
 // MAIN ORCHESTRATOR
