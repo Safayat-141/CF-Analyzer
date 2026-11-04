@@ -11,14 +11,19 @@
   <div class="container">
 
     <div class="header">
-      <h1>⚡ CF Analyzer</h1>
-      <p class="subtitle">Enter your Codeforces handle for a full AI-powered skill analysis.</p>
+      <div>
+        <div class="brand-mark"><span class="brand-dot"></span> Performance lab / 01</div>
+        <h1>CF Analyzer</h1>
+        <p class="subtitle">Turn your Codeforces history into a clear, practical plan for your next rating milestone.</p>
+      </div>
+      <button class="theme-toggle" id="themeToggle" type="button" aria-label="Switch color theme">☼ <span>Theme</span></button>
     </div>
 
     <div class="input-section">
-      <input type="text" id="handleInput" placeholder="Codeforces handle (e.g. ecnerwala)" />
-      <button id="analyzeBtn" onclick="startAnalysis()">Analyze →</button>
+      <input type="text" id="handleInput" aria-label="Codeforces handle" placeholder="Enter a Codeforces handle" autocomplete="off" />
+      <button id="analyzeBtn" onclick="startAnalysis()">Analyze profile <span aria-hidden="true">↗</span></button>
     </div>
+    <p class="hint">Press Enter to run · analysis includes solved problems, contests, and code patterns</p>
 
     <div id="loader" class="hidden">
       <div class="spinner"></div>
@@ -31,13 +36,13 @@
 
       <div class="card" id="userCard"></div>
 
-      <div class="tabs">
-        <button class="tab" onclick="switchTab(0)">Overview</button>
-        <button class="tab" onclick="switchTab(1)">Topics</button>
-        <button class="tab" onclick="switchTab(2)">Weaknesses</button>
-        <button class="tab active" onclick="switchTab(3)">Roadmap</button>
-        <button class="tab" onclick="switchTab(4)">Contests</button>
-        <button class="tab" onclick="switchTab(5)">Recent</button>
+      <div class="tabs" role="tablist" aria-label="Analysis sections">
+        <button class="tab active" role="tab" aria-selected="true" onclick="switchTab(0)">Overview</button>
+        <button class="tab" role="tab" aria-selected="false" onclick="switchTab(1)">Topics</button>
+        <button class="tab" role="tab" aria-selected="false" onclick="switchTab(2)">Weaknesses</button>
+        <button class="tab" role="tab" aria-selected="false" onclick="switchTab(3)">Roadmap</button>
+        <button class="tab" role="tab" aria-selected="false" onclick="switchTab(4)">Contests</button>
+        <button class="tab" role="tab" aria-selected="false" onclick="switchTab(5)">Recent</button>
       </div>
 
       <div class="card tab-panel" id="panel-0"></div>
